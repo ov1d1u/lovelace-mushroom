@@ -23,6 +23,7 @@ import { MushroomBaseElement } from "../../utils/base-element";
 import { cardStyle } from "../../utils/card-styles";
 import { computeRgbColor } from "../../utils/colors";
 import { registerCustomCard } from "../../utils/custom-cards";
+import { stateIcon } from "../../utils/icons/state-icon";
 import { TEMPLATE_CARD_EDITOR_NAME, TEMPLATE_CARD_NAME } from "./const";
 import { TemplateCardConfig } from "./template-card-config";
 
@@ -177,6 +178,10 @@ export class TemplateCard extends MushroomBaseElement implements LovelaceCard {
     }
 
     renderIcon(icon: string, iconColor?: string) {
+        if (icon.includes('.') && !this.isTemplate("icon")) {
+            const entity = this.hass.states[icon]; 
+            icon = stateIcon(entity);
+        }
         const iconStyle = {};
         if (iconColor) {
             const iconRgbColor = computeRgbColor(iconColor);
