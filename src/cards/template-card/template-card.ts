@@ -31,6 +31,7 @@ import {
   TemplateCardConfig,
 } from "./template-card-config";
 import { getWeatherSvgIcon } from "../../utils/icons/weather-icon";
+import { themeVariables } from "../../utils/theme";
 import { weatherSVGStyles } from "../../utils/weather";
 
 export const getEntityDefaultTileIconAction = (entityId: string) => {
@@ -451,9 +452,7 @@ export class MushroomTemplateCard extends LitElement implements LovelaceCard {
           role=${ifDefined(this._hasCardAction ? "button" : undefined)}
           tabindex=${ifDefined(this._hasCardAction ? "0" : undefined)}
           aria-labelledby="info"
-        >
-          <ha-ripple .disabled=${!this._hasCardAction}></ha-ripple>
-        </div>
+        ></div>
         <div class="container ${containerClasses}">
           ${icon || picture || primary || secondary
             ? html`<div class="content ${contentClasses}">
@@ -545,6 +544,7 @@ export class MushroomTemplateCard extends LitElement implements LovelaceCard {
     weatherSVGStyles,
     css`
       :host {
+        ${themeVariables}
         --tile-color: var(--state-inactive-color);
         -webkit-tap-highlight-color: transparent;
       }
@@ -555,9 +555,6 @@ export class MushroomTemplateCard extends LitElement implements LovelaceCard {
         box-shadow: var(--shadow-default), var(--shadow-focus);
       }
       ha-card {
-        --ha-ripple-color: var(--tile-color);
-        --ha-ripple-hover-opacity: 0.04;
-        --ha-ripple-pressed-opacity: 0.12;
         height: 100%;
         transition:
           box-shadow 180ms ease-in-out,
@@ -601,24 +598,24 @@ export class MushroomTemplateCard extends LitElement implements LovelaceCard {
         display: flex;
         flex-direction: row;
         align-items: center;
-        padding: 0 10px;
+        padding: 0 var(--spacing);
         min-height: var(--row-height, 56px);
         flex: 1;
         min-width: 0;
         box-sizing: border-box;
         pointer-events: none;
-        gap: 10px;
+        gap: var(--spacing);
       }
       .content:has(.multiline) {
-        padding-top: 10px;
-        padding-bottom: 10px;
+        padding-top: var(--spacing);
+        padding-bottom: var(--spacing);
       }
 
       .vertical {
         flex-direction: column;
         text-align: center;
         justify-content: center;
-        padding: 10px var(--ha-space-2, 8px);
+        padding: var(--spacing);
       }
       .vertical.fixed-info-height {
         gap: 2px;
@@ -638,9 +635,26 @@ export class MushroomTemplateCard extends LitElement implements LovelaceCard {
 
       ha-tile-icon {
         --tile-icon-color: var(--tile-color);
+        --tile-icon-size: var(--icon-size);
+        --tile-icon-border-radius: var(--icon-border-radius);
+        --mdc-icon-size: var(--icon-symbol-size);
+        font-size: var(--icon-size);
         position: relative;
         padding: 6px;
         margin: -6px;
+      }
+      ha-tile-icon ha-state-icon,
+      ha-tile-icon ha-icon {
+        display: flex;
+        line-height: 0;
+      }
+      ha-tile-icon::before {
+        content: "";
+        position: absolute;
+        inset: 6px;
+        border-radius: var(--icon-border-radius);
+        background-color: var(--tile-icon-color);
+        opacity: var(--tile-icon-opacity, 0.2);
       }
       ha-tile-icon.weather svg {
         width: 36px;
