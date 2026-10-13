@@ -1,11 +1,10 @@
-import { UnsubscribeFunc } from "home-assistant-js-websocket";
-import { css, html, LitElement, nothing, PropertyValues } from "lit";
+import { TemplateRenderer } from "../../utils/template-renderer";
+import { css, html, LitElement, nothing } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { ifDefined } from "lit/directives/if-defined.js";
 import { styleMap } from "lit/directives/style-map.js";
 import memoizeOne from "memoize-one";
-import hash from "object-hash/dist/object_hash";
 import {
   actionHandler,
   ActionHandlerEvent,
@@ -18,13 +17,9 @@ import {
   LovelaceCard,
   LovelaceCardEditor,
   LovelaceGridOptions,
-  RenderTemplateResult,
-  subscribeRenderTemplate,
   ActionHandlerOptions,
 } from "../../ha";
 import { computeCssColor } from "../../ha/common/color/compute-color";
-import { isTemplate } from "../../ha/common/string/has-template";
-import { CacheManager } from "../../utils/cache-manager";
 import { registerCustomCard } from "../../utils/custom-cards";
 import { LovelaceCardFeatureConfig } from "../../ha/panels/lovelace/card-features/types";
 import {
@@ -49,12 +44,6 @@ registerCustomCard({
   name: "Mushroom Template",
   description: "Build your own Mushroom card using templates",
 });
-
-const templateCache = new CacheManager<TemplateResults>(1000);
-
-type TemplateResults = Partial<
-  Record<TemplateKey, RenderTemplateResult | undefined>
->;
 
 const TEMPLATE_KEYS = [
   "icon",
@@ -98,149 +87,13 @@ export class MushroomTemplateCard extends LitElement implements LovelaceCard {
 
   @state() private _config?: TemplateCardConfig;
 
-  @state() private _templateResults?: TemplateResults;
-
-  @state() private _unsubRenderTemplates: Map<
-    TemplateKey,
-    Promise<UnsubscribeFunc>
-  > = new Map();
-
-  public connectedCallback() {
-    super.connectedCallback();
-    this._tryConnect();
-  }
-
-  public disconnectedCallback() {
-    super.disconnectedCallback();
-    this._tryDisconnect();
-
-    if (this._config && this._templateResults) {
-      const key = this._computeCacheKey();
-      templateCache.set(key, this._templateResults);
-    }
-  }
-
-  private _computeCacheKey() {
-    return hash(this._config);
-  }
-
-  protected willUpdate(_changedProperties: PropertyValues): void {
-    super.willUpdate(_changedProperties);
-    if (!this._config) {
-      return;
-    }
-
-    if (!this._templateResults) {
-      const key = this._computeCacheKey();
-      if (templateCache.has(key)) {
-        this._templateResults = templateCache.get(key)!;
-      } else {
-        this._templateResults = {};
-      }
-    }
-  }
-
-  protected updated(changedProps: PropertyValues): void {
-    super.updated(changedProps);
-    if (!this._config || !this.hass) {
-      return;
-    }
-
-    this._tryConnect();
-  }
-
-  private _getTemplateKeyValue(key: TemplateKey): string {
-    if (!this._config) {
-      return "";
-    }
-    return this._config[key] ?? "";
-  }
-
-  private async _tryConnect(): Promise<void> {
-    TEMPLATE_KEYS.forEach((key) => {
-      this._tryConnectKey(key);
-    });
-  }
-
-  private async _tryConnectKey(key: TemplateKey): Promise<void> {
-    if (
-      this._unsubRenderTemplates.get(key) !== undefined ||
-      !this.hass ||
-      !this._config
-    ) {
-      return;
-    }
-
-    const value = this._getTemplateKeyValue(key);
-    if (!isTemplate(value)) {
-      return;
-    }
-    try {
-      const sub = subscribeRenderTemplate(
-        this.hass.connection,
-        (result) => {
-          this._templateResults = {
-            ...this._templateResults,
-            [key]: result,
-          };
-        },
-        {
-          template: value,
-          entity_ids: this._config.entity_id,
-          variables: {
-            config: this._config,
-            user: this.hass.user!.name,
-            entity: this._config.entity,
-            area: this._config.area,
-          },
-          strict: true,
-        }
-      );
-      this._unsubRenderTemplates.set(key, sub);
-      await sub;
-    } catch (_err) {
-      const result = {
-        result: this._config[key] ?? "",
-        listeners: {
-          all: false,
-          domains: [],
-          entities: [],
-          time: false,
-        },
-      };
-      this._templateResults = {
-        ...this._templateResults,
-        [key]: result,
-      };
-      this._unsubRenderTemplates.delete(key);
-    }
-  }
-  private async _tryDisconnect(): Promise<void> {
-    TEMPLATE_KEYS.forEach((key) => {
-      this._tryDisconnectKey(key);
-    });
-  }
-
-  private async _tryDisconnectKey(key: TemplateKey): Promise<void> {
-    const unsubRenderTemplate = this._unsubRenderTemplates.get(key);
-    if (!unsubRenderTemplate) {
-      return;
-    }
-    this._unsubRenderTemplates.delete(key);
-
-    try {
-      const unsub = await unsubRenderTemplate;
-      // UnsubscribeFunc is typed `() => void` but resolves a promise that
-      // rejects with `not_found` if the subscription is already gone.
-      await unsub();
-    } catch (err: any) {
-      if (err.code === "not_found" || err.code === "template_error") {
-        // If we get here, the connection was probably already closed. Ignore.
-      } else {
-        throw err;
-      }
-    }
-  }
+  private readonly _templates = new TemplateRenderer(
+    this,
+    () => this.hass,
+    () => this._config,
+    TEMPLATE_KEYS,
+    ["entity", "area"]
+  );
 
   public setConfig(config: TemplateCardConfig): void {
     this._config = migrateTemplateCardConfig(config);
@@ -267,10 +120,7 @@ export class MushroomTemplateCard extends LitElement implements LovelaceCard {
   );
 
   private getValue(key: TemplateKey) {
-    const value = this._getTemplateKeyValue(key);
-    return isTemplate(value)
-      ? this._templateResults?.[key]?.result?.toString()
-      : value;
+    return this._templates.getValue(key);
   }
 
   public getCardSize(): number {

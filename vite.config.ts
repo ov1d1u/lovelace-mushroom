@@ -1,9 +1,8 @@
-import browserslistToEsbuild from "browserslist-to-esbuild";
 import { defineConfig } from "vite";
 
 export default defineConfig({
   build: {
-    target: browserslistToEsbuild(),
+    target: "es2022",
     minify: "terser",
     lib: {
       entry: "src/mushroom.ts",

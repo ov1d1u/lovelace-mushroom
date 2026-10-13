@@ -1,16 +1,14 @@
-import { UnsubscribeFunc } from "home-assistant-js-websocket";
+import { TemplateRenderer } from "../../../utils/template-renderer";
 import {
   css,
   CSSResultGroup,
   html,
   LitElement,
   nothing,
-  PropertyValues,
   TemplateResult,
 } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { styleMap } from "lit/directives/style-map.js";
-import hash from "object-hash/dist/object_hash";
 import {
   actionHandler,
   ActionHandlerEvent,
@@ -18,10 +16,7 @@ import {
   handleAction,
   hasAction,
   HomeAssistant,
-  RenderTemplateResult,
-  subscribeRenderTemplate,
 } from "../../../ha";
-import { CacheManager } from "../../../utils/cache-manager";
 import { computeRgbColor } from "../../../utils/colors";
 import { getWeatherSvgIcon } from "../../../utils/icons/weather-icon";
 import {
@@ -34,12 +29,6 @@ import {
 } from "../../../utils/lovelace/chip/types";
 import { LovelaceChipEditor } from "../../../utils/lovelace/types";
 import { weatherSVGStyles } from "../../../utils/weather";
-
-const templateCache = new CacheManager<TemplateResults>(1000);
-
-type TemplateResults = Partial<
-  Record<TemplateKey, RenderTemplateResult | undefined>
->;
 
 const TEMPLATE_KEYS = ["content", "icon", "icon_color", "picture"] as const;
 type TemplateKey = (typeof TEMPLATE_KEYS)[number];
@@ -65,22 +54,15 @@ export class TemplateChip extends LitElement implements LovelaceChip {
 
   @state() private _config?: TemplateChipConfig;
 
-  @state() private _templateResults?: TemplateResults;
-
-  @state() private _unsubRenderTemplates: Map<
-    TemplateKey,
-    Promise<UnsubscribeFunc>
-  > = new Map();
+  private readonly _templates = new TemplateRenderer(
+    this,
+    () => this.hass,
+    () => this._config,
+    TEMPLATE_KEYS,
+    ["entity"]
+  );
 
   public setConfig(config: TemplateChipConfig): void {
-    TEMPLATE_KEYS.forEach((key) => {
-      if (
-        this._config?.[key] !== config[key] ||
-        this._config?.entity != config.entity
-      ) {
-        this._tryDisconnectKey(key);
-      }
-    });
     this._config = {
       tap_action: {
         action: "toggle",
@@ -92,54 +74,16 @@ export class TemplateChip extends LitElement implements LovelaceChip {
     };
   }
 
-  public connectedCallback() {
-    super.connectedCallback();
-    this._tryConnect();
-  }
-
-  public disconnectedCallback() {
-    super.disconnectedCallback();
-    this._tryDisconnect();
-
-    if (this._config && this._templateResults) {
-      const key = this._computeCacheKey();
-      templateCache.set(key, this._templateResults);
-    }
-  }
-
-  private _computeCacheKey() {
-    return hash(this._config);
-  }
-
-  protected willUpdate(_changedProperties: PropertyValues): void {
-    super.willUpdate(_changedProperties);
-    if (!this._config) {
-      return;
-    }
-
-    if (!this._templateResults) {
-      const key = this._computeCacheKey();
-      if (templateCache.has(key)) {
-        this._templateResults = templateCache.get(key)!;
-      } else {
-        this._templateResults = {};
-      }
-    }
-  }
-
   private _handleAction(ev: ActionHandlerEvent) {
     handleAction(this, this.hass!, this._config!, ev.detail.action!);
   }
 
   public isTemplate(key: TemplateKey) {
-    const value = this._config?.[key];
-    return value?.includes("{");
+    return this._templates.isTemplate(key);
   }
 
   private getValue(key: TemplateKey) {
-    return this.isTemplate(key)
-      ? this._templateResults?.[key]?.result?.toString()
-      : this._config?.[key];
+    return this._templates.getValue(key);
   }
 
   protected render() {
@@ -193,97 +137,6 @@ export class TemplateChip extends LitElement implements LovelaceChip {
 
   protected renderContent(content: string): TemplateResult {
     return html`<span>${content}</span>`;
-  }
-
-  protected updated(changedProps: PropertyValues): void {
-    super.updated(changedProps);
-    if (!this._config || !this.hass) {
-      return;
-    }
-
-    this._tryConnect();
-  }
-
-  private async _tryConnect(): Promise<void> {
-    TEMPLATE_KEYS.forEach((key) => {
-      this._tryConnectKey(key);
-    });
-  }
-
-  private async _tryConnectKey(key: TemplateKey): Promise<void> {
-    if (
-      this._unsubRenderTemplates.get(key) !== undefined ||
-      !this.hass ||
-      !this._config ||
-      !this.isTemplate(key)
-    ) {
-      return;
-    }
-
-    try {
-      const sub = subscribeRenderTemplate(
-        this.hass.connection,
-        (result) => {
-          this._templateResults = {
-            ...this._templateResults,
-            [key]: result,
-          };
-        },
-        {
-          template: this._config[key] ?? "",
-          entity_ids: this._config.entity_id,
-          variables: {
-            config: this._config,
-            user: this.hass.user!.name,
-            entity: this._config.entity,
-          },
-          strict: true,
-        }
-      );
-      this._unsubRenderTemplates.set(key, sub);
-      await sub;
-    } catch (_err) {
-      const result = {
-        result: this._config[key] ?? "",
-        listeners: {
-          all: false,
-          domains: [],
-          entities: [],
-          time: false,
-        },
-      };
-      this._templateResults = {
-        ...this._templateResults,
-        [key]: result,
-      };
-      this._unsubRenderTemplates.delete(key);
-    }
-  }
-  private async _tryDisconnect(): Promise<void> {
-    TEMPLATE_KEYS.forEach((key) => {
-      this._tryDisconnectKey(key);
-    });
-  }
-
-  private async _tryDisconnectKey(key: TemplateKey): Promise<void> {
-    const unsubRenderTemplate = this._unsubRenderTemplates.get(key);
-    if (!unsubRenderTemplate) {
-      return;
-    }
-    this._unsubRenderTemplates.delete(key);
-
-    try {
-      const unsub = await unsubRenderTemplate;
-      // UnsubscribeFunc is typed `() => void` but resolves a promise that
-      // rejects with `not_found` if the subscription is already gone.
-      await unsub();
-    } catch (err: any) {
-      if (err.code === "not_found" || err.code === "template_error") {
-        // If we get here, the connection was probably already closed. Ignore.
-      } else {
-        throw err;
-      }
-    }
   }
 
   static get styles(): CSSResultGroup {

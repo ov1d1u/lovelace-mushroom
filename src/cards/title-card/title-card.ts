@@ -1,9 +1,8 @@
-import { UnsubscribeFunc } from "home-assistant-js-websocket";
-import { css, CSSResultGroup, html, nothing, PropertyValues } from "lit";
+import { TemplateRenderer } from "../../utils/template-renderer";
+import { css, CSSResultGroup, html, nothing } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { ifDefined } from "lit/directives/if-defined.js";
-import hash from "object-hash/dist/object_hash";
 import {
   actionHandler,
   ActionHandlerEvent,
@@ -12,24 +11,15 @@ import {
   HomeAssistant,
   LovelaceCard,
   LovelaceCardEditor,
-  RenderTemplateResult,
-  subscribeRenderTemplate,
 } from "../../ha";
 import "../../shared/shape-icon";
 import "../../shared/state-info";
 import "../../shared/state-item";
 import { MushroomBaseElement } from "../../utils/base-element";
-import { CacheManager } from "../../utils/cache-manager";
 import { cardStyle } from "../../utils/card-styles";
 import { registerCustomCard } from "../../utils/custom-cards";
 import { TITLE_CARD_EDITOR_NAME, TITLE_CARD_NAME } from "./const";
 import { TitleCardConfig } from "./title-card-config";
-
-const templateCache = new CacheManager<TemplateResults>(1000);
-
-type TemplateResults = Partial<
-  Record<TemplateKey, RenderTemplateResult | undefined>
->;
 
 registerCustomCard({
   type: TITLE_CARD_NAME,
@@ -58,23 +48,19 @@ export class TitleCard extends MushroomBaseElement implements LovelaceCard {
 
   @state() private _config?: TitleCardConfig;
 
-  @state() private _templateResults?: TemplateResults;
-
-  @state() private _unsubRenderTemplates: Map<
-    TemplateKey,
-    Promise<UnsubscribeFunc>
-  > = new Map();
+  private readonly _templates = new TemplateRenderer(
+    this,
+    () => this.hass,
+    () => this._config,
+    TEMPLATE_KEYS,
+    []
+  );
 
   getCardSize(): number | Promise<number> {
     return 1;
   }
 
   setConfig(config: TitleCardConfig): void {
-    TEMPLATE_KEYS.forEach((key) => {
-      if (this._config?.[key] !== config[key]) {
-        this._tryDisconnectKey(key);
-      }
-    });
     this._config = {
       title_tap_action: {
         action: "none",
@@ -86,50 +72,12 @@ export class TitleCard extends MushroomBaseElement implements LovelaceCard {
     };
   }
 
-  public connectedCallback() {
-    super.connectedCallback();
-    this._tryConnect();
-  }
-
-  public disconnectedCallback() {
-    super.disconnectedCallback();
-    this._tryDisconnect();
-
-    if (this._config && this._templateResults) {
-      const key = this._computeCacheKey();
-      templateCache.set(key, this._templateResults);
-    }
-  }
-
-  private _computeCacheKey() {
-    return hash(this._config);
-  }
-
-  protected willUpdate(_changedProperties: PropertyValues): void {
-    super.willUpdate(_changedProperties);
-    if (!this._config) {
-      return;
-    }
-
-    if (!this._templateResults) {
-      const key = this._computeCacheKey();
-      if (templateCache.has(key)) {
-        this._templateResults = templateCache.get(key)!;
-      } else {
-        this._templateResults = {};
-      }
-    }
-  }
-
   public isTemplate(key: TemplateKey) {
-    const value = this._config?.[key];
-    return value?.includes("{");
+    return this._templates.isTemplate(key);
   }
 
   private getValue(key: TemplateKey) {
-    return this.isTemplate(key)
-      ? this._templateResults?.[key]?.result?.toString()
-      : this._config?.[key];
+    return this._templates.getValue(key);
   }
 
   private _handleTitleAction(ev: ActionHandlerEvent) {
@@ -210,96 +158,6 @@ export class TitleCard extends MushroomBaseElement implements LovelaceCard {
     return html` <ha-icon
       .icon=${rtl ? "mdi:chevron-left" : "mdi:chevron-right"}
     ></ha-icon>`;
-  }
-
-  protected updated(changedProps: PropertyValues): void {
-    super.updated(changedProps);
-    if (!this._config || !this.hass) {
-      return;
-    }
-
-    this._tryConnect();
-  }
-
-  private async _tryConnect(): Promise<void> {
-    TEMPLATE_KEYS.forEach((key) => {
-      this._tryConnectKey(key);
-    });
-  }
-
-  private async _tryConnectKey(key: TemplateKey): Promise<void> {
-    if (
-      this._unsubRenderTemplates.get(key) !== undefined ||
-      !this.hass ||
-      !this._config ||
-      !this.isTemplate(key)
-    ) {
-      return;
-    }
-
-    try {
-      const sub = subscribeRenderTemplate(
-        this.hass.connection,
-        (result) => {
-          this._templateResults = {
-            ...this._templateResults,
-            [key]: result,
-          };
-        },
-        {
-          template: this._config[key] ?? "",
-          entity_ids: this._config.entity_id,
-          variables: {
-            config: this._config,
-            user: this.hass.user!.name,
-          },
-          strict: true,
-        }
-      );
-      this._unsubRenderTemplates.set(key, sub);
-      await sub;
-    } catch (_err) {
-      const result = {
-        result: this._config[key] ?? "",
-        listeners: {
-          all: false,
-          domains: [],
-          entities: [],
-          time: false,
-        },
-      };
-      this._templateResults = {
-        ...this._templateResults,
-        [key]: result,
-      };
-      this._unsubRenderTemplates.delete(key);
-    }
-  }
-  private async _tryDisconnect(): Promise<void> {
-    TEMPLATE_KEYS.forEach((key) => {
-      this._tryDisconnectKey(key);
-    });
-  }
-
-  private async _tryDisconnectKey(key: TemplateKey): Promise<void> {
-    const unsubRenderTemplate = this._unsubRenderTemplates.get(key);
-    if (!unsubRenderTemplate) {
-      return;
-    }
-    this._unsubRenderTemplates.delete(key);
-
-    try {
-      const unsub = await unsubRenderTemplate;
-      // UnsubscribeFunc is typed `() => void` but resolves a promise that
-      // rejects with `not_found` if the subscription is already gone.
-      await unsub();
-    } catch (err: any) {
-      if (err.code === "not_found" || err.code === "template_error") {
-        // If we get here, the connection was probably already closed. Ignore.
-      } else {
-        throw err;
-      }
-    }
   }
 
   static get styles(): CSSResultGroup {

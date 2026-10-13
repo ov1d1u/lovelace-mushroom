@@ -1,14 +1,19 @@
 # Template Card
 
-![Template light](../images/template-light.png)  
+Templates are rendered in your browser using [ha-nunjucks](https://github.com/Nerwyn/ha-nunjucks), without Home Assistant server-side template rendering. See its documentation for supported functions and syntax differences from Python/Jinja templates. Existing templates may need adjustments; there is no server-side fallback. A modern browser supporting ES2022 and top-level `await` is required. Invalid templates display their original text without stopping other fields from rendering.
+
+Templates refresh on every Home Assistant frontend update by default. Set `entity_id` to a string or list to restrict state-triggered template refreshes to those entities. Configuration, user, locale, registry, and connection changes also refresh templates. While connected, templates refresh at minute boundaries, including time templates such as `now()`; there is no automatic entity dependency detection.
+
+
+![Template light](../images/template-light.png)
 ![Template dark](../images/template-dark.png)
 
 ## Description
 
-The **Template Card** allows you to build fully customizable cards for your dashboard.  
-You can use [templating](https://www.home-assistant.io/docs/configuration/templating/) in most fields.  
+The **Template Card** allows you to build fully customizable cards for your dashboard.
+You can use [templating](https://github.com/Nerwyn/ha-nunjucks) in most fields.
 
-When defining an `entity` or an `area`, you can reference them inside templates with the `entity` and `area` variables. For example:  
+When defining an `entity` or an `area`, you can reference them inside templates with the `entity` and `area` variables. For example:
 
 ```yaml
 primary: "{{ states(entity) }}"
@@ -25,14 +30,14 @@ All options are available in the **Lovelace editor**, but you can also configure
 | :----------------------- | :------------ | :------- | :------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `entity`                 | string        | Optional | Entity used for templating, actions, and card features.                                                                                            |
 | `area`                   | string        | Optional | Area used for templating and card features.                                                                                                        |
-| `icon`                   | string        | Optional | Icon to display. Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                                              |
-| `color`                  | string        | Optional | Color applied to the icon, background effects, and card features. Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                       |
-| `picture`                | string        | Optional | Image to display instead of an icon. Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                                                                                          |
-| `primary`                | string        | Optional | Primary text (main label). Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                                                                                               |
-| `secondary`              | string        | Optional | Secondary text (subtitle or status). Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                                                                                         |
-| `badge_icon`             | string        | Optional | Icon displayed as a badge. Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                                                                                                 |
-| `badge_text`             | string        | Optional | Text displayed inside the badge. Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                                                                                             |
-| `badge_color`            | string        | Optional | Color applied to the badge. Supports [templating](https://www.home-assistant.io/docs/configuration/templating/).                                                                                                  |
+| `icon`                   | string        | Optional | Icon to display. Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                                              |
+| `color`                  | string        | Optional | Color applied to the icon, background effects, and card features. Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                       |
+| `picture`                | string        | Optional | Image to display instead of an icon. Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                                                                                          |
+| `primary`                | string        | Optional | Primary text (main label). Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                                                                                               |
+| `secondary`              | string        | Optional | Secondary text (subtitle or status). Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                                                                                         |
+| `badge_icon`             | string        | Optional | Icon displayed as a badge. Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                                                                                                 |
+| `badge_text`             | string        | Optional | Text displayed inside the badge. Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                                                                                             |
+| `badge_color`            | string        | Optional | Color applied to the badge. Supports [templating](https://github.com/Nerwyn/ha-nunjucks).                                                                                                  |
 | `multiline_secondary`    | boolean       | `false`  | If `true`, secondary text can span multiple lines.                                                                                                 |
 | `vertical`               | boolean       | `false` | If `true`, displays the icon above the text (vertical layout).                                                                                     |
 | `tap_action`             | action        | `none`   | Action performed when the card is tapped.                                                                                                          |
@@ -43,8 +48,7 @@ All options are available in the **Lovelace editor**, but you can also configure
 | `icon_double_tap_action` | action        | `none`   | Action performed when the icon is double-tapped.                                                                                                   |
 | `features`               | list          | `none`   | Card features to display (e.g., controls or extra info).                                                                                           |
 | `features_position`      | string        | `bottom` | Where features are displayed: `bottom` (below the card) or `inline` (next to content). Note: when using `inline`, only the first feature is shown. |
-| `entity_id`              | string / list | Optional | Restricts template updates to these entities. Useful if automatic detection misses dependencies.                                                            |
-
+| `entity_id`              | string / list | Optional | Restricts state-triggered template updates to these entities; otherwise all frontend updates refresh templates. |
 ---
 
 ## Theming

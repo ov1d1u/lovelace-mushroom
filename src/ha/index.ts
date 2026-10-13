@@ -28,7 +28,6 @@ export * from "./data/media-player";
 export * from "./data/translation";
 export * from "./data/update";
 export * from "./data/vacuum";
-export * from "./data/ws-templates";
 export * from "./data/ws-themes";
 export * from "./panels/lovelace/card-features/types";
 export * from "./panels/lovelace/common/directives/action-handler-directive";
