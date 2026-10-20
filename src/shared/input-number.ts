@@ -12,6 +12,7 @@ import {
   conditionalClamp,
   debounce,
   formatNumber,
+  forwardHaptic,
   FrontendLocaleData,
   getNumberPrecision,
   round,
@@ -61,14 +62,16 @@ export class InputNumber extends LitElement {
 
   private _incrementValue(e: MouseEvent) {
     e.stopPropagation();
-    if (this.value == null) return;
+    if (this.disabled || this.value == null) return;
+    forwardHaptic(this, "light");
     const value = round(this.value + this._step, this._precision);
     this._processNewValue(value);
   }
 
   private _decrementValue(e: MouseEvent) {
     e.stopPropagation();
-    if (this.value == null) return;
+    if (this.disabled || this.value == null) return;
+    forwardHaptic(this, "light");
     const value = round(this.value - this._step, this._precision);
     this._processNewValue(value);
   }

@@ -1,10 +1,16 @@
 import { css, CSSResultGroup, html, LitElement, TemplateResult } from "lit";
 import { property, customElement } from "lit/decorators.js";
+import { forwardHaptic } from "../ha/data/haptics";
 
 @customElement("mushroom-button")
 export class Button extends LitElement {
   @property() public title: string = "";
   @property({ type: Boolean }) public disabled: boolean = false;
+
+  private _handleClick() {
+    if (this.disabled) return;
+    forwardHaptic(this, "light");
+  }
 
   protected render(): TemplateResult {
     return html`
@@ -13,6 +19,7 @@ export class Button extends LitElement {
         class="button"
         .title=${this.title}
         .disabled=${this.disabled}
+        @click=${this._handleClick}
       >
         <slot> </slot>
       </button>

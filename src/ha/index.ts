@@ -19,6 +19,7 @@ export * from "./data/cover";
 export * from "./data/entity";
 export * from "./data/entity_name";
 export * from "./data/fan";
+export * from "./data/haptics";
 export * from "./data/humidifier";
 export * from "./data/light";
 export * from "./data/lock";
